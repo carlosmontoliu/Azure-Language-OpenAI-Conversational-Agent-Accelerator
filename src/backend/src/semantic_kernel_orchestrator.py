@@ -3,6 +3,7 @@
 import os
 import json
 import asyncio
+import inspect
 from typing import Callable
 from semantic_kernel.agents import AzureAIAgent, GroupChatOrchestration, GroupChatManager, BooleanResult, StringResult, MessageResult
 from semantic_kernel.contents import ChatMessageContent, ChatHistory, AuthorRole
@@ -246,20 +247,34 @@ class SemanticKernelOrchestrator:
         self.order_refund_plugin = OrderRefundPlugin()
         self.order_cancel_plugin = OrderCancellationPlugin()
 
+    async def _get_agent_definition(self, agent_key: str):
+        """
+        Fetch the agent definition from Azure AI Foundry using whichever SDK method
+        is available in the installed azure-ai-agents version.
+        """
+        agent_id = self.agent_ids[agent_key]
+
+        get_agent_fn = getattr(self.client.agents, "get_agent", None) or getattr(self.client.agents, "get", None)
+        if get_agent_fn is None:
+            raise AttributeError("The azure-ai-agents SDK does not expose a get or get_agent helper.")
+
+        result = get_agent_fn(agent_id)
+        return await result if inspect.isawaitable(result) else result
+
     async def initialize_agents(self) -> list:
         """
         Initialize the Semantic Kernel Azure AI agents for the semantic kernel orchestrator.
         This method retrieves the agent definitions from AI Foundry and creates AzureAIAgent instances for each foundry agent.
         """
         # Grab the agent definition from AI Foundry
-        triage_agent_definition = await self.client.agents.get_agent(self.agent_ids["TRIAGE_AGENT_ID"])
+        triage_agent_definition = await self._get_agent_definition("TRIAGE_AGENT_ID")
         triage_agent = AzureAIAgent(
             client=self.client,
             definition=triage_agent_definition,
             description="A triage agent that routes inquiries to the proper custom agent."
         )
 
-        order_status_agent_definition = await self.client.agents.get_agent(self.agent_ids["ORDER_STATUS_AGENT_ID"])
+        order_status_agent_definition = await self._get_agent_definition("ORDER_STATUS_AGENT_ID")
         order_status_agent = AzureAIAgent(
             client=self.client,
             definition=order_status_agent_definition,
@@ -267,7 +282,7 @@ class SemanticKernelOrchestrator:
             plugins=[OrderStatusPlugin()],
         )
 
-        order_cancel_agent_definition = await self.client.agents.get_agent(self.agent_ids["ORDER_CANCEL_AGENT_ID"])
+        order_cancel_agent_definition = await self._get_agent_definition("ORDER_CANCEL_AGENT_ID")
         order_cancel_agent = AzureAIAgent(
             client=self.client,
             definition=order_cancel_agent_definition,
@@ -275,7 +290,7 @@ class SemanticKernelOrchestrator:
             plugins=[OrderCancellationPlugin()],
         )
 
-        order_refund_agent_definition = await self.client.agents.get_agent(self.agent_ids["ORDER_REFUND_AGENT_ID"])
+        order_refund_agent_definition = await self._get_agent_definition("ORDER_REFUND_AGENT_ID")
         order_refund_agent = AzureAIAgent(
             client=self.client,
             definition=order_refund_agent_definition,
@@ -283,14 +298,14 @@ class SemanticKernelOrchestrator:
             plugins=[OrderRefundPlugin()],
         )
 
-        head_support_agent_definition = await self.client.agents.get_agent(self.agent_ids["HEAD_SUPPORT_AGENT_ID"])
+        head_support_agent_definition = await self._get_agent_definition("HEAD_SUPPORT_AGENT_ID")
         head_support_agent = AzureAIAgent(
             client=self.client,
             definition=head_support_agent_definition,
             description="A head support agent that routes inquiries to the proper custom agent.",
         )
 
-        translation_agent_definition = await self.client.agents.get_agent(self.agent_ids["TRANSLATION_AGENT_ID"])
+        translation_agent_definition = await self._get_agent_definition("TRANSLATION_AGENT_ID")
         translation_agent = AzureAIAgent(
             client=self.client,
             definition=translation_agent_definition,
