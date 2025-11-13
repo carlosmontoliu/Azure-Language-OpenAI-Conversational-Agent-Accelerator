@@ -7,3 +7,6 @@ param gpt_deployment_type = readEnvironmentVariable('AZURE_ENV_GPT_MODEL_DEPLOYM
 param embedding_model_name = readEnvironmentVariable('AZURE_ENV_EMBEDDING_MODEL_NAME', 'text-embedding-ada-002')
 param embedding_deployment_capacity = int(readEnvironmentVariable('AZURE_ENV_EMBEDDING_MODEL_CAPACITY', '100'))
 param embedding_deployment_type = readEnvironmentVariable('AZURE_ENV_EMBEDDING_MODEL_DEPLOYMENT_TYPE', 'GlobalStandard')
+
+param repository = readEnvironmentVariable('repository', 'https://github.com/Azure-Samples/Azure-Language-OpenAI-Conversational-Agent-Accelerator')
+param repository_revision = readEnvironmentVariable('repository_revision', 'main')

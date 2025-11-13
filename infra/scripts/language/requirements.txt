@@ -1,4 +1,5 @@
 azure-identity
 azure-ai-language-conversations
 azure-ai-language-questionanswering
-azure-ai-agents
+azure-ai-agents >=1.1.0
+azure-ai-projects >= 1.0.0b6

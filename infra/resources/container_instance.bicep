@@ -62,6 +62,7 @@ param app_mode string = 'SEMANTIC_KERNEL'
 param image string = 'mcr.microsoft.com/azure-cli'
 param port int = 8000
 param repository string = 'https://github.com/Azure-Samples/Azure-Language-OpenAI-Conversational-Agent-Accelerator'
+param repository_revision string = 'main'
  
 // Managed Identity:
 @description('Name of managed identity to use for Container Apps.')
@@ -130,7 +131,7 @@ resource container_instance 'Microsoft.ContainerInstance/containerGroups@2024-10
           command: [
             '/bin/bash'
             '-c'
-            'chmod +x mnt/repo/infra/scripts/run_container_app.sh && bash mnt/repo/infra/scripts/run_container_app.sh'
+            'tdnf install -y git && cd /mnt/repo && git fetch origin "$REPOSITORY_REVISION" && git checkout "$REPOSITORY_REVISION" && chmod +x infra/scripts/run_container_app.sh && bash infra/scripts/run_container_app.sh'
           ]
           environmentVariables: [
             {
@@ -192,6 +193,14 @@ resource container_instance 'Microsoft.ContainerInstance/containerGroups@2024-10
             {
               name: 'BLOB_CONTAINER_NAME'
               value: blob_container_name
+            }
+            {
+              name: 'REPOSITORY_URL'
+              value: repository
+            }
+            {
+              name: 'REPOSITORY_REVISION'
+              value: repository_revision
             }
             {
               name: 'LANGUAGE_ENDPOINT'

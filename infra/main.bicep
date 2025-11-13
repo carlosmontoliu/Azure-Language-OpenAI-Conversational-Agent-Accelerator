@@ -39,6 +39,12 @@ param embedding_deployment_capacity int
 ])
 param embedding_deployment_type string
 
+@description('Git repository URL cloned inside the container instance.')
+param repository string = 'https://github.com/Azure-Samples/Azure-Language-OpenAI-Conversational-Agent-Accelerator'
+
+@description('Git revision (branch, tag, or commit) used when cloning the repository.')
+param repository_revision string = 'main'
+
 // Variables:
 var suffix = uniqueString(subscription().id, resourceGroup().id, resourceGroup().location)
 
@@ -107,6 +113,8 @@ module container_instance 'resources/container_instance.bicep' = {
     embedding_model_name: ai_foundry.outputs.embedding_model_name
     storage_account_connection_string: storage_account.outputs.connection_string
     storage_account_name: storage_account.outputs.name
+    repository: repository
+    repository_revision: repository_revision
   }
   dependsOn: [
     role_assignments

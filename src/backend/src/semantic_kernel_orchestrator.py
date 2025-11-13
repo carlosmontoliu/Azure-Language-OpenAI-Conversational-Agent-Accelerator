@@ -4,10 +4,12 @@ import os
 import json
 import asyncio
 import inspect
-from typing import Callable
+import logging
+from typing import Callable, Dict
 from semantic_kernel.agents import AzureAIAgent, GroupChatOrchestration, GroupChatManager, BooleanResult, StringResult, MessageResult
 from semantic_kernel.contents import ChatMessageContent, ChatHistory, AuthorRole
 from semantic_kernel.agents.runtime import InProcessRuntime
+from azure.core.exceptions import ResourceNotFoundError
 from agents.order_status_plugin import OrderStatusPlugin
 from agents.order_refund_plugin import OrderRefundPlugin
 from agents.order_cancel_plugin import OrderCancellationPlugin
@@ -17,6 +19,16 @@ from pydantic import BaseModel
 # Define the confidence threshold for CLU intent recognition
 confidence_threshold = float(os.environ.get("CLU_CONFIDENCE_THRESHOLD", "0.5"))
 cqa_confidence = float(os.environ.get("CQA_CONFIDENCE", "0.5"))
+
+
+AGENT_KEY_TO_NAME: Dict[str, str] = {
+    "TRIAGE_AGENT_ID": "TriageAgent",
+    "HEAD_SUPPORT_AGENT_ID": "HeadSupportAgent",
+    "ORDER_STATUS_AGENT_ID": "OrderStatusAgent",
+    "ORDER_CANCEL_AGENT_ID": "OrderCancelAgent",
+    "ORDER_REFUND_AGENT_ID": "OrderRefundAgent",
+    "TRANSLATION_AGENT_ID": "TranslationAgent",
+}
 
 
 class ChatMessage(BaseModel):
@@ -250,16 +262,50 @@ class SemanticKernelOrchestrator:
     async def _get_agent_definition(self, agent_key: str):
         """
         Fetch the agent definition from Azure AI Foundry using whichever SDK method
-        is available in the installed azure-ai-agents version.
+        is available in the installed azure-ai-agents / azure-ai-projects version.
+        Falls back to locating the agent by name if the stored ID is stale.
         """
-        agent_id = self.agent_ids[agent_key]
-
+        agent_id = self.agent_ids.get(agent_key)
         get_agent_fn = getattr(self.client.agents, "get_agent", None) or getattr(self.client.agents, "get", None)
         if get_agent_fn is None:
             raise AttributeError("The azure-ai-agents SDK does not expose a get or get_agent helper.")
 
-        result = get_agent_fn(agent_id)
-        return await result if inspect.isawaitable(result) else result
+        if agent_id:
+            try:
+                result = get_agent_fn(agent_id)
+                return await result if inspect.isawaitable(result) else result
+            except ResourceNotFoundError:
+                logging.warning("Agent id %s is no longer valid; attempting to locate agent by name.", agent_key)
+
+        agent_name = AGENT_KEY_TO_NAME.get(agent_key)
+        if not agent_name:
+            raise KeyError(f"No agent name mapping defined for key {agent_key}")
+
+        list_agents_fn = getattr(self.client.agents, "list_agents", None) or getattr(self.client.agents, "list", None)
+        if list_agents_fn is None:
+            raise AttributeError("The azure-ai-agents SDK does not expose a list or list_agents helper.")
+
+        agents_iter = list_agents_fn()
+        matched_agent = None
+
+        if hasattr(agents_iter, "__aiter__"):
+            async for agent in agents_iter:
+                if getattr(agent, "name", None) == agent_name:
+                    matched_agent = agent
+                    break
+        else:
+            for agent in agents_iter:
+                if getattr(agent, "name", None) == agent_name:
+                    matched_agent = agent
+                    break
+
+        if not matched_agent:
+            raise ResourceNotFoundError(f"Unable to locate agent named '{agent_name}' in project {self.project_endpoint}.")
+
+        # Update local cache so subsequent calls use the fresh id.
+        self.agent_ids[agent_key] = matched_agent.id
+        logging.info("Refreshed agent id for %s (%s).", agent_key, matched_agent.id)
+        return matched_agent
 
     async def initialize_agents(self) -> list:
         """
