@@ -10,3 +10,4 @@ param embedding_deployment_type = readEnvironmentVariable('AZURE_ENV_EMBEDDING_M
 
 param repository = readEnvironmentVariable('repository', 'https://github.com/Azure-Samples/Azure-Language-OpenAI-Conversational-Agent-Accelerator')
 param repository_revision = readEnvironmentVariable('repository_revision', 'main')
+param resource_suffix_salt = readEnvironmentVariable('RESOURCE_SUFFIX_SALT', '')

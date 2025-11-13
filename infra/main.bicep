@@ -45,8 +45,16 @@ param repository string = 'https://github.com/Azure-Samples/Azure-Language-OpenA
 @description('Git revision (branch, tag, or commit) used when cloning the repository.')
 param repository_revision string = 'main'
 
+@description('Optional salt to force new resource names when reusing a resource group.')
+param resource_suffix_salt string = ''
+
 // Variables:
-var suffix = uniqueString(subscription().id, resourceGroup().id, resourceGroup().location)
+var suffix = uniqueString(
+  subscription().id,
+  resourceGroup().id,
+  resourceGroup().location,
+  resource_suffix_salt
+)
 
 //----------- Deploy App Dependencies -----------//
 module managed_identity 'resources/managed_identity.bicep' = {
