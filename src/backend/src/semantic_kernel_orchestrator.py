@@ -1,15 +1,10 @@
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT License.
 import os
 import json
 import asyncio
-import inspect
-import logging
-from typing import Callable, Dict
+from typing import Callable
 from semantic_kernel.agents import AzureAIAgent, GroupChatOrchestration, GroupChatManager, BooleanResult, StringResult, MessageResult
 from semantic_kernel.contents import ChatMessageContent, ChatHistory, AuthorRole
 from semantic_kernel.agents.runtime import InProcessRuntime
-from azure.core.exceptions import ResourceNotFoundError
 from agents.order_status_plugin import OrderStatusPlugin
 from agents.order_refund_plugin import OrderRefundPlugin
 from agents.order_cancel_plugin import OrderCancellationPlugin
@@ -19,16 +14,6 @@ from pydantic import BaseModel
 # Define the confidence threshold for CLU intent recognition
 confidence_threshold = float(os.environ.get("CLU_CONFIDENCE_THRESHOLD", "0.5"))
 cqa_confidence = float(os.environ.get("CQA_CONFIDENCE", "0.5"))
-
-
-AGENT_KEY_TO_NAME: Dict[str, str] = {
-    "TRIAGE_AGENT_ID": "TriageAgent",
-    "HEAD_SUPPORT_AGENT_ID": "HeadSupportAgent",
-    "ORDER_STATUS_AGENT_ID": "OrderStatusAgent",
-    "ORDER_CANCEL_AGENT_ID": "OrderCancelAgent",
-    "ORDER_REFUND_AGENT_ID": "OrderRefundAgent",
-    "TRANSLATION_AGENT_ID": "TranslationAgent",
-}
 
 
 class ChatMessage(BaseModel):
@@ -259,68 +244,20 @@ class SemanticKernelOrchestrator:
         self.order_refund_plugin = OrderRefundPlugin()
         self.order_cancel_plugin = OrderCancellationPlugin()
 
-    async def _get_agent_definition(self, agent_key: str):
-        """
-        Fetch the agent definition from Azure AI Foundry using whichever SDK method
-        is available in the installed azure-ai-agents / azure-ai-projects version.
-        Falls back to locating the agent by name if the stored ID is stale.
-        """
-        agent_id = self.agent_ids.get(agent_key)
-        get_agent_fn = getattr(self.client.agents, "get_agent", None) or getattr(self.client.agents, "get", None)
-        if get_agent_fn is None:
-            raise AttributeError("The azure-ai-agents SDK does not expose a get or get_agent helper.")
-
-        if agent_id:
-            try:
-                result = get_agent_fn(agent_id)
-                return await result if inspect.isawaitable(result) else result
-            except ResourceNotFoundError:
-                logging.warning("Agent id %s is no longer valid; attempting to locate agent by name.", agent_key)
-
-        agent_name = AGENT_KEY_TO_NAME.get(agent_key)
-        if not agent_name:
-            raise KeyError(f"No agent name mapping defined for key {agent_key}")
-
-        list_agents_fn = getattr(self.client.agents, "list_agents", None) or getattr(self.client.agents, "list", None)
-        if list_agents_fn is None:
-            raise AttributeError("The azure-ai-agents SDK does not expose a list or list_agents helper.")
-
-        agents_iter = list_agents_fn()
-        matched_agent = None
-
-        if hasattr(agents_iter, "__aiter__"):
-            async for agent in agents_iter:
-                if getattr(agent, "name", None) == agent_name:
-                    matched_agent = agent
-                    break
-        else:
-            for agent in agents_iter:
-                if getattr(agent, "name", None) == agent_name:
-                    matched_agent = agent
-                    break
-
-        if not matched_agent:
-            raise ResourceNotFoundError(f"Unable to locate agent named '{agent_name}' in project {self.project_endpoint}.")
-
-        # Update local cache so subsequent calls use the fresh id.
-        self.agent_ids[agent_key] = matched_agent.id
-        logging.info("Refreshed agent id for %s (%s).", agent_key, matched_agent.id)
-        return matched_agent
-
     async def initialize_agents(self) -> list:
         """
         Initialize the Semantic Kernel Azure AI agents for the semantic kernel orchestrator.
         This method retrieves the agent definitions from AI Foundry and creates AzureAIAgent instances for each foundry agent.
         """
-        # Grab the agent definition from AI Foundry
-        triage_agent_definition = await self._get_agent_definition("TRIAGE_AGENT_ID")
+        # Grab the agent definition from AI Foundry        
+        triage_agent_definition = await self.client.agents.get_agent(self.agent_ids["TRIAGE_AGENT_ID"])
         triage_agent = AzureAIAgent(
             client=self.client,
             definition=triage_agent_definition,
             description="A triage agent that routes inquiries to the proper custom agent."
         )
 
-        order_status_agent_definition = await self._get_agent_definition("ORDER_STATUS_AGENT_ID")
+        order_status_agent_definition = await self.client.agents.get_agent(self.agent_ids["ORDER_STATUS_AGENT_ID"])
         order_status_agent = AzureAIAgent(
             client=self.client,
             definition=order_status_agent_definition,
@@ -328,7 +265,7 @@ class SemanticKernelOrchestrator:
             plugins=[OrderStatusPlugin()],
         )
 
-        order_cancel_agent_definition = await self._get_agent_definition("ORDER_CANCEL_AGENT_ID")
+        order_cancel_agent_definition = await self.client.agents.get_agent(self.agent_ids["ORDER_CANCEL_AGENT_ID"])
         order_cancel_agent = AzureAIAgent(
             client=self.client,
             definition=order_cancel_agent_definition,
@@ -336,7 +273,7 @@ class SemanticKernelOrchestrator:
             plugins=[OrderCancellationPlugin()],
         )
 
-        order_refund_agent_definition = await self._get_agent_definition("ORDER_REFUND_AGENT_ID")
+        order_refund_agent_definition = await self.client.agents.get_agent(self.agent_ids["ORDER_REFUND_AGENT_ID"])
         order_refund_agent = AzureAIAgent(
             client=self.client,
             definition=order_refund_agent_definition,
@@ -344,14 +281,14 @@ class SemanticKernelOrchestrator:
             plugins=[OrderRefundPlugin()],
         )
 
-        head_support_agent_definition = await self._get_agent_definition("HEAD_SUPPORT_AGENT_ID")
+        head_support_agent_definition = await self.client.agents.get_agent(self.agent_ids["HEAD_SUPPORT_AGENT_ID"])
         head_support_agent = AzureAIAgent(
             client=self.client,
             definition=head_support_agent_definition,
             description="A head support agent that routes inquiries to the proper custom agent.",
         )
 
-        translation_agent_definition = await self._get_agent_definition("TRANSLATION_AGENT_ID")
+        translation_agent_definition = await self.client.agents.get_agent(self.agent_ids["TRANSLATION_AGENT_ID"])
         translation_agent = AzureAIAgent(
             client=self.client,
             definition=translation_agent_definition,

@@ -52,6 +52,22 @@
             "cwd": "${workspaceFolder}/src/backend/src",
             "console": "integratedTerminal",
             "justMyCode": false
+        },
+        {
+        "name": "Python: Debug uvicorn semantic_kernel_app",
+        "type": "python",
+        "request": "launch",
+        "module": "uvicorn",
+        "args": [
+            "semantic_kernel_app:app",
+            "--host", "0.0.0.0",
+            "--port", "8000",
+            "--reload"
+        ],
+        "cwd": "${workspaceFolder}/src/backend/src",
+        "envFile": "${workspaceFolder}/.env.local",
+        "console": "integratedTerminal",
+        "justMyCode": false
         }
     ]
-}
+}       
